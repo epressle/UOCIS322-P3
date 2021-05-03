@@ -6,6 +6,7 @@ from a scrambled string)
 
 import flask
 import logging
+from flask import request
 
 # Our modules
 from src.letterbag import LetterBag
@@ -74,7 +75,7 @@ def success():
 #   a JSON request handler
 #######################
 
-@app.route("/_check", methods=["POST"])
+@app.route("/_check")
 def check():
     """
     User has submitted the form with a word ('attempt')
@@ -87,35 +88,41 @@ def check():
     app.logger.debug("Entering check")
 
     # The data we need, from form and from cookie
-    text = flask.request.form["attempt"]
+    text = request.args.get("text", type=str)
     jumble = flask.session["jumble"]
     matches = flask.session.get("matches", [])  # Default to empty list
 
     # Is it good?
     in_jumble = LetterBag(jumble).contains(text)
     matched = WORDS.has(text)
-
+    code = -1
     # Respond appropriately
     if matched and in_jumble and not (text in matches):
         # Cool, they found a new word
+        code = 1
         matches.append(text)
         flask.session["matches"] = matches
+    # if the word has already been found
     elif text in matches:
-        flask.flash("You already found {}".format(text))
+        code = 2
+    # if the word is not in the list of words
     elif not matched:
-        flask.flash("{} isn't in the list of words".format(text))
+        code = 3
+    # if the word is not a valid anagram of the letters
     elif not in_jumble:
-        flask.flash(
-            '"{}" can\'t be made from the letters {}'.format(text, jumble))
-    else:
+        code = 4
+    # if there are enough matches to satisfy the condition
+    if len(matches) >= flask.session["target_count"]:
+        code = 0
+    if (code == -1):
         app.logger.debug("This case shouldn't happen!")
         assert False  # Raises AssertionError
-
-    # Choose page:  Solved enough, or keep going?
-    if len(matches) >= flask.session["target_count"]:
-       return flask.redirect(flask.url_for("success"))
-    else:
-       return flask.redirect(flask.url_for("keep_going"))
+        
+    # create a dictionary of the code that has been created from logic above
+    # and the current matches
+    rslt = {"code": code, "matches": matches}
+    # jsonify the dictionary
+    return flask.jsonify(result=rslt)
 
 
 ###############

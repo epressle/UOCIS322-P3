@@ -73,31 +73,83 @@
          <br />
          <div class="row">
             <div class="col-xs-6 text-center">
-               <form id="entry" method="POST" action="/_check">
+               <form id="entry">
                   <label for="attempt">Word:</label>
                   <input id="attempt" name="attempt" type="text" width="15"
                      autocomplete="off"  autofocus />
-                  <input type="submit" name="try" />
                </form>
             </div>
          </div>
          <br />
-         {% if session.matches|length is not equalto 0  %}
-         <h2>You found </h2>
-         <p id="results">
-            {% for match in session.matches %}
-            {{ match }}
-            {% endfor %}
-         </p>
-         {% endif %}
-         {% with messages = get_flashed_messages() %}
-         {% if messages %}
+         <h2>You found:</h2>
+         <p id = "found"></p>
+         <p id = "alerts" style="color:red"></p>
+         <script>
+            // Suppress normal form submission
+            $("#entry").submit( function(event) {
+                event.preventDefault();
+            });
+
+            // On each keystroke, ask the server whether the current
+            // word is long enough.
+            //
+            // We use 'keyup' because the form value
+            // is updated before that event is generated.
+            // keypress is triggered before the input field has been
+            // updated.  Be aware that we'll see non-character keys like
+            // shift and control, so make sure whatever you do with the
+            // event does not depend on it being a letter.
+            //
+            $("#attempt").keyup(function(event) {
+                var txt = $("#attempt").val();  // Current content of the input field
+                var keycode = event.which;      // They key that just went up
+                var letter = String.fromCharCode(keycode);
+
+                // That letter might not be a letter ... it could be the
+                // the backspace key, or even the shift key, because 'keyup'
+                // catches all kinds of keys.  (Also, the difference between
+                // upper and lower case comes from state of shift key + key code,
+                // so ignoring the shift key we get only the upper case letters.
+
+                if (! "ABCDEFGHIJKLMNOPQRSTUVWXYZ".includes(letter)) { return }
+
+                $.getJSON( "/_check", { text: txt },
+                    function(data) {
+                        // initalize the code from Flask
+                        var code = data.result.code;
+                        // begin switch statement that covers all cases
+                        switch(code) {
+                            // finished with scramble case
+                            case 0:
+                                // redirect to success page
+                                window.location.href = "/success";
+                                break;
+                            // new word found case
+                            case 1:
+                                // set textbox to empty, append the word to found
+                                $("#attempt").val("");
+                                $("#found").append(txt);
+                                $("#found").append(" ");
+                                $("#alerts").text("You found " + txt + "!");
+                                break;
+                            // already found case
+                            case 2:
+                                $("#alerts").text(txt + " has already been found!");
+                                break;
+                            // not matched case
+                            case 3:
+                                $("#alerts").text(txt + " is not in the word list.");
+                                break;
+                            // not in jumble case
+                            case 4:
+                                $("#alerts").text(txt + " is not a valid anagram of the letters.");
+                                break;
+                        }
+                    }
+             );
+           });
+         </script>
          <!-- Mismatch, already found, etc. "flashed" from Python -->
-         {% for message in messages %}
-         <p class="message">{{ message }}</p>
-         {% endfor %}
-         {% endif %}
-         {% endwith %}
       </div>
       <!-- container -->
    </body>
